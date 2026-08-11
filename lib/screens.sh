@@ -102,7 +102,7 @@ talent_chooser() {
     printf '  %sChoose a talent by number (or s to skip):%s ' "$P_GREEN" "$RESET"
 
     local choice
-    read -r choice
+    read -r choice || choice="s"   # EOF: skip instead of looping forever
 
     if [[ "$choice" == "s" || "$choice" == "S" ]]; then
       return
@@ -181,7 +181,7 @@ skill_tree() {
     printf '  %sCommands:%s unlock <id> | toggle <id> | persona <id> | prompt <id> | q\n' "$P_GREEN" "$RESET"
     printf '  > '
     local cmd
-    read -r cmd
+    read -r cmd || cmd="q"   # EOF: leave the grimoire instead of looping
 
     if [[ "$cmd" == "q" || -z "$cmd" ]]; then
       return

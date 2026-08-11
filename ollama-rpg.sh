@@ -41,7 +41,7 @@ fi
 
 # Source everything in dependency order. Each lib file self-guards against
 # being sourced more than once.
-for lib in config palette state data ollama effects progression tui screens tools encounters lore commands main; do
+for lib in config palette state data ollama gen effects progression tui screens tools encounters lore commands main; do
   lib_path="$LIB_DIR/${lib}.sh"
   if [[ ! -f "$lib_path" ]]; then
     echo "Error: missing library: $lib_path" >&2
@@ -102,7 +102,7 @@ case "${1:-}" in
     ;;
   "") ;;
   *)
-    CHAR[model]="$1"
+    OLLAMA_RPG_CLI_MODEL="$1"
     ;;
 esac
 

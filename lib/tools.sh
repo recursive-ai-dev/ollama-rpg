@@ -159,11 +159,12 @@ _tool_diff_viewer() {
   read -n 1 -s -r -p "  Press any key to return..."
 }
 
-_tool_save_session() {
+# Write the current conversation out to a session file. Echoes the path and
+# returns 1 if there is nothing to save. quiet=1 suppresses the notice.
+write_session_file() {
+  local quiet=${1:-0}
   if (( ${#MSG_ROLE[@]} == 0 )); then
-    printf '  %sNo conversation to save.%s\n' "$P_RED" "$RESET"
-    sleep 1
-    return
+    return 1
   fi
   local ts
   ts=$(date '+%Y%m%d_%H%M%S')
@@ -182,8 +183,21 @@ _tool_save_session() {
       echo ""
     done
   } > "$outfile"
-  printf '  %sSaved to: %s%s\n' "$P_GREEN" "$outfile" "$RESET"
-  sleep 2
+  if (( quiet == 0 )); then
+    printf '  %sSaved to: %s%s\n' "$P_GREEN" "$outfile" "$RESET"
+    sleep 2
+  fi
+  echo "$outfile"
+}
+
+# Quiet checkpoint used at quit/EOF; ignores empty conversations.
+auto_save_session() {
+  (( ${#MSG_ROLE[@]} == 0 )) && return 0
+  write_session_file 1 >/dev/null 2>&1 || true
+}
+
+_tool_save_session() {
+  write_session_file 0 || printf '  %sNo conversation to save.%s\n' "$P_RED" "$RESET"
 }
 
 # ── v2 tools ────────────────────────────────────────────────────────────────

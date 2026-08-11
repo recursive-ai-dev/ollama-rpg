@@ -65,7 +65,19 @@ SAVE_KEYS=(
   achievements inventory encounters_seen challenges_won bosses_slain
 )
 
+# Integer-typed keys and their fallback defaults if a save value is corrupt.
+INT_KEYS=(level xp hp hp_max mp mp_max gold prompts_sent tokens_received
+  quests_completed streak talent_points encounters_seen challenges_won bosses_slain)
+declare -gA INT_DEFAULTS=(
+  [level]=1 [xp]=0 [hp]=100 [hp_max]=100 [mp]=50 [mp_max]=50 [gold]=0
+  [prompts_sent]=0 [tokens_received]=0 [quests_completed]=0 [streak]=1
+  [talent_points]=0 [encounters_seen]=0 [challenges_won]=0 [bosses_slain]=0
+)
+
+# Write to a temp file and atomically rename so an interrupted save can never
+# leave a truncated/corrupt save behind (the previous good copy survives).
 save_state() {
+  local tmp="${SAVE_FILE}.tmp.$$"
   {
     echo "# Ollama RPG save file"
     echo "# Version: $SCRIPT_VERSION"
@@ -74,11 +86,40 @@ save_state() {
     for key in "${SAVE_KEYS[@]}"; do
       printf '%s=%s\n' "$key" "${CHAR[$key]:-}"
     done
-  } > "$SAVE_FILE"
+  } > "$tmp" && mv -f "$tmp" "$SAVE_FILE"
+}
+
+# Coerce a value to a non-negative integer >= min; fall back to default.
+sanitize_int() {
+  local v=$1 default=$2 min=${3:-0}
+  [[ "$v" =~ ^[0-9]+$ ]] || v=$default
+  (( v < min )) && v=$min
+  printf '%s' "$v"
+}
+
+# Validate a comma-separated list against a token regex (empty is valid).
+valid_list() {
+  local v=$1 token=$2
+  [[ -z "$v" || "$v" =~ ^$token(,$token)*$ ]]
 }
 
 load_state() {
   if [[ ! -f "$SAVE_FILE" ]]; then
+    return 1
+  fi
+
+  # Sanity check: the file must contain at least one recognizable key=value
+  # line (after comment/blank lines). Anything else is a corrupt save.
+  local sane=0 line
+  while IFS= read -r line; do
+    [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+    if [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
+      sane=1
+    fi
+    break
+  done < "$SAVE_FILE"
+  if (( sane == 0 )); then
+    mv -f "$SAVE_FILE" "${SAVE_FILE}.corrupt-$(date '+%Y%m%d%H%M%S')" 2>/dev/null
     return 1
   fi
 
@@ -87,15 +128,36 @@ load_state() {
   for k in "${SAVE_KEYS[@]}"; do known+="|$k"; done
   known="${known}|"
 
-  while IFS='=' read -r key val; do
+  while IFS= read -r line; do
     # Skip comments and empty lines
-    [[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
-    # Trim whitespace
+    [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+    # Skip lines without key=value syntax
+    [[ "$line" != *=* ]] && continue
+
+    local key="${line%%=*}"
+    local val="${line#*=}"
+    val="${val%$'\r'}"  # tolerate CRLF line endings from manual edits
+
+    # Trim whitespace around the key
     key="${key#"${key%%[![:space:]]*}"}"
     key="${key%"${key##*[![:space:]]}"}"
-    # Only set known keys
+    [[ -n "$key" ]] || continue
+
+    # Only set known keys; coerce integers and lists to prevent corrupt
+    # values from bricking progression math or the UI later.
     if [[ "$known" == *"|$key|"* ]]; then
-      CHAR[$key]="$val"
+      local min=0
+      if [[ "$key" == "hp_max" || "$key" == "mp_max" ]]; then min=1; fi
+      if [[ " ${INT_KEYS[*]} " == *" $key "* ]]; then
+        CHAR[$key]=$(sanitize_int "$val" "${INT_DEFAULTS[$key]}" "$min")
+      elif [[ "$key" == "inventory" ]]; then
+        if valid_list "$val" '[A-Za-z0-9_]+:[0-9]+'; then CHAR[$key]="$val"; else CHAR[$key]=""; fi
+      elif [[ "$key" == "skills" || "$key" == "active_skills" \
+            || "$key" == "talents" || "$key" == "achievements" ]]; then
+        if valid_list "$val" '[A-Za-z0-9_]+'; then CHAR[$key]="$val"; else CHAR[$key]=""; fi
+      else
+        CHAR[$key]="$val"
+      fi
     fi
   done < "$SAVE_FILE"
 

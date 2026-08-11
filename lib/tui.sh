@@ -49,12 +49,14 @@ hr() {
 }
 
 # Word-wrap text to width, print each line (with optional indent).
+# NOTE: printf emits a trailing newline — bash 5.3+ read() reports failure on
+# unterminated input, which would silently drop the final line.
 wrap_print() {
   local text="$1" width="${2:-$((TERM_W - 4))}"
   local indent="${3:-0}"
   local indent_str=""
   [[ $indent -gt 0 ]] && indent_str=$(printf '%*s' "$indent" '')
-  printf '%s' "$text" | fold -s -w "$width" | while IFS= read -r ln; do
+  printf '%s\n' "$text" | fold -s -w "$width" | while IFS= read -r ln; do
     printf '%s%s%s\n' "$indent_str" "$ln" "$RESET"
   done
 }

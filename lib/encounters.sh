@@ -80,9 +80,24 @@ maybe_encounter() {
     return
   fi
 
-  local pick=${ENCOUNTERS[$(( RANDOM % ${#ENCOUNTERS[@]} ))]}
   local eid ename edesc etype earg
-  IFS='|' read -r eid ename edesc etype earg <<< "$pick"
+  local generated=0
+  # 35% of the time, let the wizard conjure a live world event. Any LLM
+  # failure falls back to the scripted pool below.
+  if (( RANDOM % 100 < 35 )) && declare -F gen_encounter >/dev/null; then
+    if gen_encounter; then
+      eid="gen_$RANDOM"
+      ename="$GEN_NAME"
+      edesc="$GEN_DESC"
+      etype="$GEN_EFFECT"
+      earg="$GEN_AMOUNT"
+      generated=1
+    fi
+  fi
+  if (( generated == 0 )); then
+    local pick=${ENCOUNTERS[$(( RANDOM % ${#ENCOUNTERS[@]} ))]}
+    IFS='|' read -r eid ename edesc etype earg <<< "$pick"
+  fi
 
   echo ""
   box_banner "$B_PINK" "⚡ $ename ⚡" "$edesc"

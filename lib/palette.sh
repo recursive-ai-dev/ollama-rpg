@@ -49,3 +49,8 @@ HOME_C="${ESC}[H"
 CLEAR_LINE="${ESC}[2K"
 SAVE_C="${ESC}7"
 LOAD_C="${ESC}8"
+
+# Alternate screen buffer (only entered when stdout is a tty; harmless no-op
+# sequences otherwise). Let `tput` decide, fall back to the xterm sequence.
+SMCUP="$(tput smcup 2>/dev/null || printf '\033[?1049h')"
+RMCUP="$(tput rmcup 2>/dev/null || printf '\033[?1049l')"

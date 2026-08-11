@@ -46,7 +46,13 @@ handle_command() {
       if [[ -z "$args" ]]; then _list_personas; else _set_persona "$args"; fi ;;
     /prompt)
       if [[ -z "$args" ]]; then _list_system_prompts; else _set_system_prompt "$args"; fi ;;
-    /quest|/quests)         quest_log ;;
+    /quest|/quests)
+      if [[ "$args" == "generate" ]]; then
+        gen_quest
+      else
+        quest_log
+      fi ;;
+    /sessions)          _cmd_sessions ;;
     /status|/char|/sheet)   status_screen ;;
     /inv|/inventory)        inventory_screen ;;
     /ach|/achievements)     achievement_screen ;;
@@ -85,6 +91,7 @@ handle_command() {
     /search)  run_shell_tool "search" ;;
     /spell)   run_shell_tool "spell" ;;
     /quit|/exit|/q)
+      auto_save_session
       save_state
       printf '\n  %s%s⚔  Farewell, brave coder. May your code compile on the first try.  ⚔%s\n\n' "$B_GOLD" "$BOLD" "$RESET"
       exit 0 ;;
@@ -113,6 +120,7 @@ _cmd_help() {
   printf '  %s/skills%s             Open the skill grimoire\n' "$P_GREEN" "$RESET"
   printf '  %s/talents%s            Spend talent points\n' "$P_GREEN" "$RESET"
   printf '  %s/quest%s              View quest log\n' "$P_GREEN" "$RESET"
+  printf '  %s/quest generate%s     Have the Oracle create a custom quest\n' "$P_GREEN" "$RESET"
   printf '  %s/model%s              Change your Ollama model\n' "$P_GREEN" "$RESET"
   printf '  %s/persona%s            Set AI persona (/persona <id>)\n' "$P_GREEN" "$RESET"
   printf '  %s/prompt%s             Set system prompt (/prompt <id>)\n' "$P_GREEN" "$RESET"
@@ -122,6 +130,7 @@ _cmd_help() {
   printf '  %s/use <id>%s           Use an item (e.g. /use potion_hp)\n' "$P_GREEN" "$RESET"
   printf '  %s/ach%s                View achievements\n' "$P_GREEN" "$RESET"
   printf '  %s/lore%s               Read the world codex (/lore <n>)\n' "$P_GREEN" "$RESET"
+  printf '  %s/sessions%s            Browse saved conversations\n' "$P_GREEN" "$RESET"
   printf '  %s/challenge%s          Duel a riddle for XP\n' "$P_GREEN" "$RESET"
   printf '  %s/boss%s               Face a Code Dragon for glory\n' "$P_GREEN" "$RESET"
 
@@ -270,3 +279,59 @@ _run_challenge() {
 
 _cmd_challenge() { _run_challenge CHALLENGES 100 25 0; }
 _cmd_boss()      { _run_challenge BOSSES 300 150 1; }
+
+# ── Saved sessions browser ───────────────────────────────────────────────────
+
+_cmd_sessions() {
+  clear_screen
+  printf '\n  %s%sMemory Vault — Saved Sessions%s\n' "$B_GOLD" "$BOLD" "$RESET"
+  hr "" "$TERM_W"
+  local files=()
+  local f
+  for f in "$SESSION_DIR"/session-*.txt; do
+    [[ -f "$f" ]] && files+=("$f")
+  done
+  if (( ${#files[@]} == 0 )); then
+    printf '  %sNo saved sessions yet. They are written automatically on quit,%s\n' "$P_GREY" "$RESET"
+    printf '  %sor manually with the Scribe%s Quill skill (/history).%s\n' "$P_GREY" "$RESET" "$RESET"
+    hr "" "$TERM_W"
+    read -n 1 -s -r -p "  Press any key to return..."
+    return
+  fi
+  local idx=1
+  for f in "${files[@]}"; do
+    local first_line
+    first_line=$(grep -m1 '^▶' "$f" 2>/dev/null | sed 's/^▶ You: //' | head -c 60)
+    printf '  %s[%d]%s %s%s%s\n' "$P_GOLD" "$idx" "$RESET" "$P_GREEN" "$(basename "$f")" "$RESET"
+    [[ -n "$first_line" ]] && printf '       %s%s...%s\n' "$P_GREY" "$first_line" "$RESET"
+    ((idx++))
+  done
+  printf '   %sq%s to return%s\n' "$P_GOLD" "$RESET" "$RESET"
+  hr "" "$TERM_W"
+  printf '  %sView session number:%s ' "$P_GREEN" "$RESET"
+  local choice
+  read -r choice
+  [[ "$choice" == "q" || -z "$choice" ]] && return
+  if [[ ! "$choice" =~ ^[0-9]+$ ]] || (( choice < 1 || choice > ${#files[@]} )); then
+    printf '  %sInvalid choice.%s\n' "$P_RED" "$RESET"
+    sleep 1
+    return
+  fi
+  clear_screen
+  local chosen="${files[$((choice - 1))]}"
+  printf '\n  %s%s━━ %s ━━%s\n\n' "$B_GOLD" "$BOLD" "$(basename "$chosen")" "$RESET"
+  while IFS= read -r line; do
+    if [[ "$line" == "▶ You:" ]]; then
+      printf '  %s▶ You:%s ' "$B_AMBER" "$RESET"
+    elif [[ "$line" == "✦ Wizard:" ]]; then
+      printf '  %s✦ Wizard:%s ' "$B_GREEN" "$RESET"
+    elif [[ -z "$line" ]]; then
+      echo ""
+    else
+      wrap_print "$line" "$((TERM_W - 8))" 0 | sed 's/^/  /'
+      echo ""
+    fi
+  done < "$chosen"
+  echo ""
+  read -n 1 -s -r -p "  Press any key to return..."
+}

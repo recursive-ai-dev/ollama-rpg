@@ -43,6 +43,9 @@ update_streak() {
 # ─────────────────────────────────────────────────────────────────────────────
 
 main_loop() {
+  # Load persistent prompt history so ↑/↓ recall previous prompts.
+  history -r "$PROMPT_HIST_FILE" 2>/dev/null || true
+
   while true; do
     update_term_size
     clear_screen
@@ -53,7 +56,17 @@ main_loop() {
     printf '\n  %s> %s' "$B_GREEN" "$RESET"
 
     local user_input
-    read -e -r user_input
+    if ! read -e -r user_input; then
+      # EOF (Ctrl+D) or read error — treat as quit instead of spinning.
+      auto_save_session
+      printf '\n  %sFarewell, apprentice.%s\n' "$P_AMBER" "$RESET"
+      break
+    fi
+    # Persist the prompt for next session (skip empty lines)
+    if [[ -n "$user_input" ]]; then
+      history -s "$user_input"
+      history -w "$PROMPT_HIST_FILE" 2>/dev/null || true
+    fi
 
     # Slash command?
     if [[ "$user_input" =~ ^/ ]]; then
@@ -157,12 +170,27 @@ ${user_input}"
 # ─────────────────────────────────────────────────────────────────────────────
 
 cleanup() {
+  # Skip in subshells: `trap cleanup EXIT` fires when every pipeline subshell
+  # ends, which would spray cursor escapes into the middle of the stream.
+  [[ "${BASH_SUBSHELL:-0}" -eq 0 ]] || return 0
   printf '%s' "$SHOW_CURSOR"
   printf '%s' "$RESET"
+  if [[ -n "${_IN_ALT_SCREEN:-}" ]]; then
+    printf '%s' "$RMCUP"
+  fi
   stty sane 2>/dev/null || true
 }
 
-trap cleanup EXIT INT TERM
+# INT/TERM: restore the terminal and actually terminate — before this, the
+# trap only cleaned up and the game kept spinning on blocked reads.
+_term_handler() {
+  [[ "${BASH_SUBSHELL:-0}" -eq 0 ]] || return 0
+  cleanup
+  exit 0
+}
+
+trap cleanup EXIT
+trap _term_handler INT TERM
 
 # ─────────────────────────────────────────────────────────────────────────────
 # BOOT
@@ -170,6 +198,15 @@ trap cleanup EXIT INT TERM
 
 rpg_boot() {
   update_term_size
+
+  # Enter the alternate screen buffer so the game plays on a clean
+  # fullscreen surface and the terminal scrollback is restored on exit.
+  if [[ -t 1 ]]; then
+    printf '%s' "$SMCUP"
+    declare -g _IN_ALT_SCREEN=1
+  fi
+  printf '%s' "$HIDE_CURSOR"
+
   splash_screen
 
   if load_state; then
@@ -194,6 +231,11 @@ rpg_boot() {
   if [[ -z "${CHAR[model]}" ]]; then
     printf '\n  %sNo familiar bound. Choose one to begin.%s\n' "$P_AMBER" "$RESET"
     model_picker || true
+  fi
+
+  # A model passed on the command line wins over any stale saved model.
+  if [[ -n "${OLLAMA_RPG_CLI_MODEL:-}" ]]; then
+    CHAR[model]="$OLLAMA_RPG_CLI_MODEL"
   fi
 
   update_streak

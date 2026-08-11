@@ -20,6 +20,9 @@ LOG_FILE="${LOG_FILE:-${HOME}/.ollama-rpg.log}"
 SNIPPET_DIR="${HOME}/.ollama-rpg-snippets"
 SESSION_DIR="${HOME}/.ollama-rpg-sessions"
 
+# Persistent prompt history (up/down arrows recall previous prompts)
+PROMPT_HIST_FILE="${PROMPT_HIST_FILE:-${HOME}/.ollama-rpg-history}"
+
 # Tunable progression knobs (override via env if you like)
 XP_PER_PROMPT="${XP_PER_PROMPT:-5}"
 TOKEN_XP_DIVISOR="${TOKEN_XP_DIVISOR:-10}"
