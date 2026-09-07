@@ -43,19 +43,19 @@ SPLASH
 # ─────────────────────────────────────────────────────────────────────────────
 
 level_up_animation() {
-  local lvl=${CHAR[level]}
+  local lvl=${CHAR[level]:-0}
   local title
   title=$(class_title "$lvl")
 
   echo ""
-  printf '%s%s╔══════════════════════════════════════════════════════════════╗%s\n' "$B_GOLD" "$RESET"
+  printf '%s%s╔══════════════════════════════════════════════════════════════╗\n' "$B_GOLD" "$RESET"
   printf '%s%s║%s%s   ✦  LEVEL UP!  ✦   You are now Level %s  —  %s  %s%s║%s\n' \
     "$B_GOLD" "$RESET" "$P_GOLD" "$BOLD" "$lvl" "$title" "$P_GOLD" "$B_GOLD" "$RESET"
   printf '%s%s║%s%s   HP max +10 → %d    MP max +5 → %d    Gold +%d       %s%s║%s\n' \
-    "$B_GOLD" "$RESET" "$P_GREEN" "$BOLD" "${CHAR[hp_max]}" "${CHAR[mp_max]}" "$(( 20 * lvl ))" "$P_GOLD" "$B_GOLD" "$RESET"
+    "$B_GOLD" "$RESET" "$P_GREEN" "$BOLD" "${CHAR[hp_max]:-0}" "${CHAR[mp_max]:-0}" "$(( 20 * lvl ))" "$P_GOLD" "$B_GOLD" "$RESET"
   printf '%s%s║%s%s   Talent Points: %d available                       %s%s║%s\n' \
-    "$B_GOLD" "$RESET" "$P_AMBER" "$BOLD" "${CHAR[talent_points]}" "$P_GOLD" "$B_GOLD" "$RESET"
-  printf '%s%s╚══════════════════════════════════════════════════════════════╝%s\n' "$B_GOLD" "$RESET"
+    "$B_GOLD" "$RESET" "$P_AMBER" "$BOLD" "${CHAR[talent_points]:-0}" "$P_GOLD" "$B_GOLD" "$RESET"
+  printf '%s%s╚══════════════════════════════════════════════════════════════╝\n' "$B_GOLD" "$RESET"
   echo ""
 }
 
@@ -64,10 +64,10 @@ level_up_animation() {
 # ─────────────────────────────────────────────────────────────────────────────
 
 talent_chooser() {
-  while (( ${CHAR[talent_points]} > 0 )); do
+  while (( ${CHAR[talent_points]:-0} > 0 )); do
     clear_screen
     printf '\n  %s%s⚔  TALENT GUILD  ⚔%s\n' "$B_GOLD" "$BOLD" "$RESET"
-    printf '  %sYou have %d talent point(s) to spend.%s\n\n' "$P_AMBER" "${CHAR[talent_points]}" "$RESET"
+    printf '  %sYou have %d talent point(s) to spend.%s\n\n' "$P_AMBER" "${CHAR[talent_points]:-0}" "$RESET"
 
     hr "Available Talents" "$TERM_W"
 
@@ -78,7 +78,7 @@ talent_chooser() {
       IFS='|' read -r tid tname tdesc tlvl <<< "$talent"
 
       [[ ",${CHAR[talents]}," == *",$tid,"* ]] && continue
-      (( ${CHAR[level]} < tlvl )) && continue
+      (( ${CHAR[level]:-0} < tlvl )) && continue
 
       available+=("$tid")
       printf '  %s[%d]%s %s%s%s %s(Lv.%d)%s — %s\n' \
@@ -123,16 +123,16 @@ talent_chooser() {
     else
       CHAR[talents]="$chosen"
     fi
-    CHAR[talent_points]=$(( ${CHAR[talent_points]} - 1 ))
+    CHAR[talent_points]=$(( ${CHAR[talent_points]:-0} - 1 ))
 
     case "$chosen" in
       tough)
-        CHAR[hp_max]=$(( ${CHAR[hp_max]} + 20 ))
-        CHAR[hp]=$(( ${CHAR[hp]} + 20 ))
+        CHAR[hp_max]=$(( ${CHAR[hp_max]:-0} + 20 ))
+        CHAR[hp]=$(( ${CHAR[hp]:-0} + 20 ))
         ;;
       arcane)
-        CHAR[mp_max]=$(( ${CHAR[mp_max]} + 20 ))
-        CHAR[mp]=$(( ${CHAR[mp]} + 20 ))
+        CHAR[mp_max]=$(( ${CHAR[mp_max]:-0} + 20 ))
+        CHAR[mp]=$(( ${CHAR[mp]:-0} + 20 ))
         ;;
       lorekeeper)
         local starter
@@ -175,7 +175,7 @@ skill_tree() {
 
     hr "" "$TERM_W"
     printf '  %sGold:%s %s%d%s   %sActive Skills:%s %s\n' \
-      "$P_AMBER" "$RESET" "$P_GOLD" "${CHAR[gold]}" "$RESET" \
+      "$P_AMBER" "$RESET" "$P_GOLD" "${CHAR[gold]:-0}" "$RESET" \
       "$P_AMBER" "$RESET" "${CHAR[active_skills]:-none}"
     hr "" "$TERM_W"
     printf '  %sCommands:%s unlock <id> | toggle <id> | persona <id> | prompt <id> | q\n' "$P_GREEN" "$RESET"
@@ -187,7 +187,9 @@ skill_tree() {
       return
     fi
 
-    _skill_handle_command $cmd
+    # Use array to safely split words and avoid globbing
+    read -ra cmd_args <<< "$cmd"
+    _skill_handle_command "${cmd_args[@]}"
   done
 }
 
@@ -223,7 +225,7 @@ _skill_print_section() {
         status="owned"; status_color="$P_AMBER"
       fi
     else
-      if (( ${CHAR[level]} < slvl )); then
+      if (( ${CHAR[level]:-0} < slvl )); then
         status="locked (Lv.$slvl)"; status_color="$P_GREY"
       else
         local cost=$(( slvl * 25 ))
@@ -264,18 +266,18 @@ _skill_handle_command() {
         sleep 1
         return
       fi
-      if (( ${CHAR[level]} < slvl )); then
+      if (( ${CHAR[level]:-0} < slvl )); then
         printf '  %sRequires level %d.%s\n' "$P_RED" "$slvl" "$RESET"
         sleep 1
         return
       fi
       local cost=$(( slvl * 25 ))
-      if (( ${CHAR[gold]} < cost )); then
-        printf '  %sNeed %d gold (have %d).%s\n' "$P_RED" "$cost" "${CHAR[gold]}" "$RESET"
+      if (( ${CHAR[gold]:-0} < cost )); then
+        printf '  %sNeed %d gold (have %d).%s\n' "$P_RED" "$cost" "${CHAR[gold]:-0}" "$RESET"
         sleep 1
         return
       fi
-      CHAR[gold]=$(( ${CHAR[gold]} - cost ))
+      CHAR[gold]=$(( ${CHAR[gold]:-0} - cost ))
       if [[ -n "${CHAR[skills]}" ]]; then
         CHAR[skills]="${CHAR[skills]},$sid"
       else
@@ -498,7 +500,7 @@ quest_log() {
 
 status_screen() {
   clear_screen
-  local lvl=${CHAR[level]}
+  local lvl=${CHAR[level]:-0}
   local title
   title=$(class_title "$lvl")
   local xp_needed
@@ -512,23 +514,23 @@ status_screen() {
 
   hr "Vital Stats" "$TERM_W"
   printf '  %sHP:%s %s%d/%d%s   %sMP:%s %s%d/%d%s\n' \
-    "$P_RED" "$RESET" "$P_RED" "${CHAR[hp]}" "${CHAR[hp_max]}" "$RESET" \
-    "$P_CYAN" "$RESET" "$P_CYAN" "${CHAR[mp]}" "${CHAR[mp_max]}" "$RESET"
+    "$P_RED" "$RESET" "$P_RED" "${CHAR[hp]:-0}" "${CHAR[hp_max]:-0}" "$RESET" \
+    "$P_CYAN" "$RESET" "$P_CYAN" "${CHAR[mp]:-0}" "${CHAR[mp_max]:-0}" "$RESET"
   printf '  %sXP:%s %s%d/%d%s   %sGold:%s %s%d%s\n' \
-    "$P_AMBER" "$RESET" "$P_GOLD" "${CHAR[xp]}" "$xp_needed" "$RESET" \
-    "$P_AMBER" "$RESET" "$P_GOLD" "${CHAR[gold]}" "$RESET"
+    "$P_AMBER" "$RESET" "$P_GOLD" "${CHAR[xp]:-0}" "$xp_needed" "$RESET" \
+    "$P_AMBER" "$RESET" "$P_GOLD" "${CHAR[gold]:-0}" "$RESET"
 
   hr "Activity" "$TERM_W"
   printf '  %sPrompts sent:%s %d   %sTokens received:%s %d\n' \
-    "$P_AMBER" "$RESET" "${CHAR[prompts_sent]}" \
-    "$P_AMBER" "$RESET" "${CHAR[tokens_received]}"
+    "$P_AMBER" "$RESET" "${CHAR[prompts_sent]:-0}" \
+    "$P_AMBER" "$RESET" "${CHAR[tokens_received]:-0}"
   printf '  %sQuests completed:%s %d   %sStreak:%s %d🔥\n' \
     "$P_AMBER" "$RESET" "${CHAR[quests_completed]:-0}" \
-    "$P_AMBER" "$RESET" "${CHAR[streak]}"
+    "$P_AMBER" "$RESET" "${CHAR[streak]:-0}"
   printf '  %sChallenges won:%s %d   %sBosses slain:%s %d   %sTalent points:%s %d\n' \
-    "$P_AMBER" "$RESET" "${CHAR[challenges_won]}" \
-    "$P_AMBER" "$RESET" "${CHAR[bosses_slain]}" \
-    "$P_AMBER" "$RESET" "${CHAR[talent_points]}"
+    "$P_AMBER" "$RESET" "${CHAR[challenges_won]:-0}" \
+    "$P_AMBER" "$RESET" "${CHAR[bosses_slain]:-0}" \
+    "$P_AMBER" "$RESET" "${CHAR[talent_points]:-0}"
 
   hr "Owned Skills" "$TERM_W"
   if [[ -z "${CHAR[skills]:-}" ]]; then
