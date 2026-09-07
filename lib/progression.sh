@@ -46,9 +46,9 @@ metric_value() {
   case "$1" in
     prompts_sent|prompts) echo "${CHAR[prompts_sent]}" ;;
     tokens)               echo "${CHAR[tokens_received]}" ;;
-    level)                echo "${CHAR[level]}" ;;
+    level)                echo "${CHAR[level]:-0}" ;;
     streak)               echo "${CHAR[streak]}" ;;
-    gold)                 echo "${CHAR[gold]}" ;;
+    gold)                 echo "${CHAR[gold]:-0}" ;;
     challenges)           echo "${CHAR[challenges_won]}" ;;
     bosses)               echo "${CHAR[bosses_slain]}" ;;
     items)                total_items ;;
@@ -62,22 +62,22 @@ metric_value() {
 # talent chooser (defined in lib/screens.sh) at runtime.
 level_up_check() {
   while true; do
-    local current_level=${CHAR[level]}
+    local current_level=${CHAR[level]:-0}
     local needed
     needed=$(xp_for_level "$current_level")
 
-    if (( ${CHAR[xp]} >= needed )); then
+    if (( ${CHAR[xp]:-0} >= needed )); then
       CHAR[level]=$(( current_level + 1 ))
-      CHAR[xp]=$(( ${CHAR[xp]} - needed ))
-      CHAR[hp_max]=$(( ${CHAR[hp_max]} + 10 ))
-      CHAR[mp_max]=$(( ${CHAR[mp_max]} + 5 ))
-      CHAR[hp]=${CHAR[hp_max]}
-      CHAR[mp]=${CHAR[mp_max]}
-      CHAR[gold]=$(( ${CHAR[gold]} + 20 * ${CHAR[level]} ))
-      CHAR[talent_points]=$(( ${CHAR[talent_points]} + 1 ))
+      CHAR[xp]=$(( ${CHAR[xp]:-0} - needed ))
+      CHAR[hp_max]=$(( ${CHAR[hp_max]:-0} + 10 ))
+      CHAR[mp_max]=$(( ${CHAR[mp_max]:-0} + 5 ))
+      CHAR[hp]=${CHAR[hp_max]:-0}
+      CHAR[mp]=${CHAR[mp_max]:-0}
+      CHAR[gold]=$(( ${CHAR[gold]:-0} + 20 * ${CHAR[level]:-0} ))
+      CHAR[talent_points]=$(( ${CHAR[talent_points]:-0} + 1 ))
 
       if has_talent "scholar"; then
-        CHAR[talent_points]=$(( ${CHAR[talent_points]} + 1 ))
+        CHAR[talent_points]=$(( ${CHAR[talent_points]:-0} + 1 ))
       fi
 
       level_up_animation
@@ -107,7 +107,7 @@ apply_xp() {
     fi
   fi
 
-  CHAR[xp]=$(( ${CHAR[xp]} + amount ))
+  CHAR[xp]=$(( ${CHAR[xp]:-0} + amount ))
 
   level_up_check
   check_quests
@@ -173,19 +173,19 @@ check_quests() {
       fi
 
       echo ""
-      printf '  %s%s╔══════════════════════════════════════════════════════════════╗%s\n' "$B_CYAN" "$RESET"
-      printf '  %s%s║%s%s   ⚔  QUEST COMPLETE!  ⚔   %-42s%s║%s\n' \
+      printf '  %s%s╔══════════════════════════════════════════════════════════════╗\n' "$B_CYAN" "$RESET"
+      printf '  %s%s║%s%s   ⚔  QUEST COMPLETE!  ⚔   %-42s%s%s║%s\n' \
         "$B_CYAN" "$RESET" "$P_CYAN" "$BOLD" "$qname" "$P_CYAN" "$B_CYAN" "$RESET"
       printf '  %s%s║%s%s   %s                                              %s%s║%s\n' \
         "$B_CYAN" "$RESET" "$P_GREEN" "$RESET" "$qdesc" "$P_CYAN" "$B_CYAN" "$RESET"
       printf '  %s%s║%s%s   Reward: %d XP, %d gold                          %s%s║%s\n' \
         "$B_CYAN" "$RESET" "$P_GOLD" "$BOLD" "$qxp" "$qgold" "$P_CYAN" "$B_CYAN" "$RESET"
-      printf '  %s%s╚══════════════════════════════════════════════════════════════╝%s\n' "$B_CYAN" "$RESET"
+      printf '  %s%s╚══════════════════════════════════════════════════════════════╝\n' "$B_CYAN" "$RESET"
       echo ""
 
       # Award rewards (bypass talent XP modifiers for quest XP)
-      CHAR[xp]=$(( ${CHAR[xp]} + qxp ))
-      CHAR[gold]=$(( ${CHAR[gold]} + qgold ))
+      CHAR[xp]=$(( ${CHAR[xp]:-0} + qxp ))
+      CHAR[gold]=$(( ${CHAR[gold]:-0} + qgold ))
 
       # Small chance of a bonus item drop on quest completion.
       if (( RANDOM % 100 < 25 )); then
